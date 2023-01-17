@@ -1,7 +1,7 @@
 # Welcome, my name is Christian! 👋
 
 
-## 🚀 Sobre mim
+## 🚀 About me
 My name is Christian Gonçalves, soon to be grad with a Bachelor's in Information Management Systems. 
 
 New Jersey Native, with a passion for data science, I'm learning some data visualization tools such as Tableau to enrich my portfolio. As of today, I've developed some skills by learning R and SQL in my academic course and Python in my free time.  
