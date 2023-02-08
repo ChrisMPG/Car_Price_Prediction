@@ -1,0 +1,546 @@
+---
+title: "Geely Auto"
+subtitle: "Car Price Prediction"
+author: "Christian Gonçalves"
+date: "2023-01-8\\clearpage"
+output:
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+---
+
+\newpage
+
+# 1.Introduction
+
+A Chinese car company aspires to enter the north-american market by installing a manufacturing unit there and producing the cars locally to give competition to their counterparts.
+
+Based on various market surveys, the consulting firm has gathered a large data set of different types of cars across the America market.
+
+The Original Dataset can be downloaded at: "<https://www.kaggle.com/datasets/hellbuoy/car-price-prediction?resource=download>".
+
+After getting the dataset, many changes were made in order to optimize and access better data inputs to utilize in this project. By transforming the data these were the results of each step:
+
+1.  df - Original dataframe;
+2.  df1 - Dataframe after Exploratory and Descriptive Analysis (EDA);
+3.  df2 - Dataframe for the Correlation Graph;
+4.  df3 - Dataframe used for the Shiny app;
+5.  p1 - Predictive Dataframe using GBM_SM as the MLM;
+6.  p2 - Predictive Dataframe using GBM_BM as the MLM;\
+7.  p3 - Predictive Dataframe using DRF_SM as the MLM;
+8.  p4 - Predictive Dataframe using DRF_BM as the MLM;
+
+\newpage
+
+# 2.Problem Assignment
+
+Specifically, they want to comprehend the factors that influence the US car market, which is vastly different compared to the Chinese market. These will be the objectives that Geely Auto wants to know:
+
+-   Which variables have the most impact in the car price prediction;
+-   How well do those variables describe the price of a car;
+
+So, we are required to use MLM in order to predict the price of a car, with the available independent variables.
+
+# 3.Success Criteria
+
+As for success criteria, i have decided to make it so:
+
+-   The predictor model will be able to predict the car price within 1000$ mean range of error (over or bellow the real price)
+
+\newpage
+
+# 4. Exploratory and Descriptive Analysis
+
+## 4.1. Get libraries and dataset
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(corrplot)
+library(tidyverse)
+library(Amelia)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(ggrepel)
+library(formattable)
+df <- read.csv(file="CarPrice_Assignment.csv", sep=",", header = T)
+```
+
+## 4.2 Problem identification and solution step
+
+We verified that:
+
+1.  Change the car name "alfa-romero" to "alfa" in order to ensure that we don't get a problem that i´ll state later in this report;
+
+2.  The column "Carname" is inefficient, so i´ll create to new columns in order to filter all the brands and models in different columns;
+
+3.  Some brands and models are misspelled, so they will be corrected Note: I changed the "alfa-romero" brand first because, if i did it in this step, the model of the car would be "romero", and not for example "giulia";
+
+4.  The brand subaru is missing 2 models, so we need to check that out;
+
+5.  The following columns are in categorical form, when they should be Integers: doornumber and cylindernumber;
+
+6.  It would be interesting to have a average MPG;
+
+7.  Get rid of Carid column, no need for unique cars in this dataset;
+
+8.  There is no currency stated in the price variable so its needing a refresh;
+
+<!-- -->
+
+Let´s start by correcting the alfa Brand...
+
+## 4.3. Problem Solving
+###4.3.1. Orthographic correction of the Alfa-romero 
+
+```{r c1, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+df1 <- within (df, {
+  CarName[CarName == 'alfa-romero giulia'] <- "alfa giulia"
+  CarName[CarName == 'alfa-romero stelvio'] <- "alfa stelvio"
+  CarName[CarName == 'alfa-romero Quadrifoglio'] <- "alfa quadrifoglio"
+})
+```
+
+\newpage
+
+Next up we have to divide the CarName column into two separate columns...
+
+###4.3.2. Separation of the CarName into two new columns
+
+```{r c2, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+df1 <- df1 %>% separate(CarName, c('Brand', 'Model'))
+```
+
+With the creation of two new columns, we need to address the new missing values with the Brand "subaru", but firstly i will solve the following step that´s dedicated dedicated for orthographic errors inside the Brand column...
+
+###4.3.3. Orthographic correction in Brand column
+
+```{r c3, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+df1 <- within(df1,{
+  Brand[Brand == 'vw'] <- "volkswagen"
+  Brand[Brand == 'maxda'] <- "mazda"
+  Brand[Brand == 'porcshce'] <- "porsche"
+  Brand[Brand == 'vokswagen'] <- "volkswagen"
+  Brand[Brand == 'toyouta'] <- "toyota"
+  Brand[Brand == 'Nissan'] <- "nissan"
+})
+```
+
+Now that the spellings are correct, it´s time to address the "subaru problem"...
+
+###4.3.4 Addresing the missing Subaru models 
+
+```{r c4, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+df1$Model <- ifelse(df1$Brand == 'subaru' & is.na(df1$Model), 'impreza', df1$Model)
+```
+
+Next up, we have to change the variable types that we mentioned before...
+
+###4.3.5. Changing the data types of the variables "cylindernumber" and "doornumber"
+
+```{r c5, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+df1$cylindernumber <- as.numeric(ifelse(df1$cylindernumber == 'two', 2,
+                                        ifelse(df1$cylindernumber == 'three', 3,
+                                               ifelse(df1$cylindernumber == 'four', 4,
+                                                      ifelse(df1$cylindernumber == 'five', 5,
+                                                             ifelse(df1$cylindernumber == 'six', 6,
+                                                                    ifelse(df1$cylindernumber == 'eight', 8,
+                                                                           ifelse(df1$cylindernumber == 'twelve', 12, 4 ))))))))
+
+df1$doornumber <- as.numeric(ifelse(df1$doornumber == 'two', 2, 
+                                    ifelse(df1$doornumber == 'four', 4, 4)))
+                                    
+```
+
+Now that´s complete we can now create a new column based on the overall mpg of the cars...
+
+###4.3.6. Creating a new column meanmpg
+```{r  c3712, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+df1$meanmpg <- rowMeans(df1[,c('citympg', 'highwaympg')], na.rm=TRUE)
+```
+
+Almost forgot, we don´t need this column for the purpose of the prediction:
+
+###4.3.7. Discarding the column Car_ID
+```{r  c2334, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+df1$car_ID = NULL
+```
+
+\newpage
+
+Also we can add the currency:
+
+###4.3.8. Adding a currency to the price column
+```{r  c1238, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+currency(df1$price, digits = 0L)
+```
+
+
+```{r c3234234, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+str(df1$price)
+```
+
+\newpage
+
+Time to check for missing values in our dataframe...
+
+```{r c432423424, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+options(repr.plot.width = 12, repr.plot.height = 10)
+missmap(df1,margins=c(4,2))
+```
+
+With no missing values, the next step will be checking the variable correlation by executing a corrplot...
+
+```{r c542523, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+num.cols <- sapply(df1, is.numeric)
+df2 <- df1[,num.cols]
+corrplot(cor(df2), order = "hclust", method = "number")
+```
+
+The price of the car has the highest positive correlation with the engine size, curbweight and horsepower, however it´s very important that we mention the wheelbase, carlength, carwidth and boreratio are also positively correlated just not as highly correlated as the first mentioned variables.
+
+Let´s check on some of the most meaningful variables in a few plots... 
+
+\newpage
+
+## 4.4. Plotting 
+
+```{r c9, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(drivewheel,price)) + 
+  geom_boxplot() +
+  theme(axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),plot.title = element_text(hjust = .5,lineheight = .20, size = 15)) +
+  scale_y_continuous(label = scales::comma_format()) + 
+  labs(title = "Car prices taking into account traction")
+```
+
+We can see that on average rwd cars are more expensive than 4wd cars and 4wd cars are slightly more expensive than fwd cars.
+We can make this plot better by adding the carbody variable to it ....
+
+
+```{r c10, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(drivewheel,price)) + 
+  geom_boxplot() + 
+  theme(axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        strip.text = element_text(size = 12), 
+        plot.title = element_text(hjust = .5,lineheight = .20, size = 15),
+        plot.subtitle = element_text(hjust = .5,lineheight = .20, size = 12)) +
+  facet_grid(~carbody) +
+  scale_y_continuous(label = scales::comma_format()) + 
+  labs(title = "Car prices taking into account traction and carbody")
+```
+
+Here we can see that on average hard-top cars are the most expensive. 
+Also, convertible and hardtop cars are mostly rwd.
+
+
+
+We can also add the fueltype variable...
+
+```{r c11, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(drivewheel,price)) + 
+  geom_boxplot() + 
+  theme(axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        strip.text = element_text(size = 12)) +
+  facet_grid(fueltype~carbody) +
+  scale_y_continuous(label = scales::comma_format()) +
+  labs(title = "Car prices taking into account traction, carbody and fueltype")
+```
+
+By adding this variable we can see that on average there are more gas cars than diesel based cars.
+Finally we add the last variable: doornumber
+
+
+```{r c12, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df, aes(drivewheel,price, fill = doornumber)) + 
+  geom_boxplot() + facet_grid(fueltype~carbody) + 
+  theme(legend.title = element_text(size=15),
+        legend.text = element_text(size = 12),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        strip.text = element_text(size = 12)) + 
+  scale_y_continuous(label = scales::comma_format())+
+  labs(title = "Car prices taking into account traction, carbody, fueltype and doornumber")
+```
+
+By adding this variable it´s noticeable that hardtop and convertible cars have two doors.
+
+So, what information do we take from all this ?
+
+1.  Most of the cars are rwd;
+2.  On average, rwd based cars are more expensive than the other types and are distributed in all the categories ;
+3.  Most of the cars are gas powered, and there are just a few diesel cars
+4.  In one hand, cabriolet type cars and hardtops usually have 2 doors, and on the other hand, wagons and sedans usually have 4 doors (Mostly due to be resorted has family cars and are more practical).
+
+Moving on to our response variable (price), it will be of interest to see how price is distributed across our dataset.
+
+```{r c13, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(price)) + 
+  geom_histogram(bins = 30, col = "white") + 
+  scale_x_continuous(label = scales::comma_format()) + 
+  labs(title = "Car price distribution") + 
+  theme(plot.title = element_text(hjust = .5,lineheight = .20, size = 15),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        axis.title.x = element_text(size = 14))
+```
+
+From this plot, we can observe that most of our cars from the dataset are priced below 20,000$
+Let´s add the drivewheel variable and see what happens next...
+
+
+```{r c14, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(price)) + 
+  geom_histogram(bins = 30, col = "white") + 
+  scale_x_continuous(label = scales::comma_format()) + 
+  labs(title = "Car price distribution taking into account the traction") + 
+  theme(plot.title = element_text(hjust = .5,lineheight = .20, size = 15),
+        plot.subtitle = element_text(hjust = .5,lineheight = .20, size = 15),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        axis.title.x = element_text(size = 14),
+        strip.text = element_text(size = 14)) + 
+  facet_wrap(~drivewheel, nrow=3)
+```
+
+From this addition, now we can see, again, that rwd cars are all over the price range and fwd have the cheapest cars from our dataset.
+
+Now we add the cylindernumber variable to this exact plot and we see...
+
+
+```{r c15, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(price)) + 
+  geom_histogram(bins = 30, col = "white") + 
+  scale_x_continuous(label = scales::comma_format()) + 
+  labs(title = "Car price distribution taking into account the traction and cylindernumber") + 
+  theme(plot.title = element_text(hjust = .5,lineheight = .20, size = 15),
+        plot.subtitle = element_text(hjust = .5,lineheight = .20, size = 15),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        axis.title.x = element_text(size = 14),
+        strip.text = element_text(size = 14)) + 
+  facet_wrap(~cylindernumber, nrow=3)
+```
+
+That most of our cars have 4 cylinders, and are also the cheapest cars in the dataset. 
+
+Until now we analysed most of our numerical type data but, what about the categorical data?
+Let's switch to categorical columns and let´s check  how distributed our car brands are across drivewheel and doornumber... 
+
+
+```{r c16, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ordered_price <- df1 %>% 
+  arrange(desc(price))
+
+high_price <- ordered_price %>% filter(price > mean(price)) %>%
+  dplyr::select(price, enginesize, drivewheel, Brand, Model)
+
+ordered_price %>% 
+  group_by(Brand) %>% 
+  summarise(mean = round(mean(price),0),sd = round(sd(price),0)) %>% 
+  arrange(desc(mean))
+```
+
+It´s clear that Jaguar has the most expensive cars on average, although it´s safe to say that BMW has such a high variance in prices. That means there is a BMW in all price ranges.
+Quick mention to Mercury that appears to have a NA value! That´s because there is only one car with the brand Mercury. 
+
+Let´s see in detail how these cars are distributed...
+
+```{r c17, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(high_price, aes(price, reorder(Model, price))) + 
+  geom_point() + 
+  facet_grid(
+    factor(Brand, levels = 
+             c("buick", 'bmw', 'porsche','jaguar', 'audi','volvo','nissan','saab','mazda','toyota',
+               'peugeot','mercury','alfa','mitsubishi','volkswagen')) ~., scales = "free", space = "free") +
+  theme(strip.text.y = element_text(angle = 0),strip.text= element_text(size=13),axis.text.y = element_text(size = 11),
+        plot.title = element_text(hjust = .5,lineheight = .20, size = 15),
+        plot.subtitle = element_text(hjust = .5,lineheight = .20, size = 12),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 10)) +
+  scale_x_continuous(label = scales::comma_format()) + 
+  labs(title="Most expensive cars in the dataset") + ylab("Model")
+```
+
+With this plot we can see that Porsche, Jaguar and Buick are considered as luxury cars. Also it´s noticeable that the variance of prices that we came to conclusion on the last tibble, is again true. 
+
+Next up, just like in the corrplot that i made before, we have seen that the enginesize variable is also highly correlated to the price variable. Let´s plot it ...
+
+```{r c18, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(price, enginesize, color = drivewheel)) + 
+  geom_point() + 
+  geom_smooth(method = lm, se = F, color = "black", size = 0.2, linetype = "dashed") +
+  geom_hline(yintercept = mean(df1$enginesize), linetype = "dashed", size = 1) + 
+  geom_vline(xintercept = mean(df1$price), linetype = "dashed", size = 1) +
+  annotate("text", x = 14900, y = 250, label = "Mean",size = 5) +
+  annotate("text", x = 38000, y = 131, label = "Mean",size = 5) +
+  geom_text_repel(data=ordered_price %>% top_n(20,price), aes(price, enginesize, label = Brand),color = "red",
+                  segment.color = "black") + scale_x_continuous(label = scales::comma_format()) +
+  geom_text_repel(data=ordered_price %>% top_n(-3,price), aes(price, enginesize, label = Brand),color = "red",
+                  segment.color = "black") +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(size = 13),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        plot.title = element_text(hjust = .5,lineheight = .20, size = 15),
+        plot.subtitle = element_text(hjust = .5,lineheight = .20, size = 12)) + 
+  labs(title = "Relationship plot between enginesize and price")
+```
+
+The plot represents the relationship between the price and enginesize variables. It´s clear that the 3rd quadrant is occupied mostly with fwd cars that represent the cheapest cars and the smallest engines. About the rwd cars they are all over the 4 quadrants, which means that rwd cars can be cheap or expensive and even have the small or big engines.
+One last note regarding this relationship, it´s clear that this is a linear relationship, which means the bigger the engine the more expensive will be, and vice-versa.
+
+Just one more plot to see what happens with the addition of carbody too...
+
+```{r c156, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(df1, aes(price, enginesize, color = carbody)) + 
+  geom_point() +
+  facet_wrap(~drivewheel) +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(size = 13),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        plot.title = element_text(hjust = .5,lineheight = .20, size = 15),
+        plot.subtitle = element_text(hjust = .5,lineheight = .20, size = 12),
+        strip.text = element_text(size = 12)) +
+  scale_x_continuous(label = scales::comma_format()) +
+  labs(title = "Car price distribution taking into account the enginesize, drivewheel and carbody")
+```
+
+Now we can see that the cheapest car is a hatchback and the most expensive one is a hardtop.
+
+Now that we studied the relationship between variables, let´s get to the MLM (Machine Learning Models) implementation to predict the price of a car.
+
+\newpage
+
+# 5. Machine Learning Models
+
+In order to implement MLM´s, i used the H2O platform, details about the platform later on the report. Since we are facing a regression type problem it´s better to implement a supervised type of machine learning model, so i tested two of them called Gradient Boosting Machine ( or GBM ) and Distributed Random Forest ( or DRF ).
+
+With these i intend to predict a price of a car, by choosing the most accurate model between the two above.
+
+Quick note: For the sake of getting the best of the MLM´s iv´e made two of each model. What differentiates them is one of them has all the variables (p2 and p4) and the other does not have the Brand nor Model (p1 and p3).
+The reason behind this is to prove that the MLM will be "bias" towards the Brand or Model variable because of its significance towards this prediction.
+The main point of this prediction is not only to get the best accuracy of the prediction but as well get a trustworthy result at the end.
+
+
+Let´s start of with the MLM GBM...
+
+
+```{r c111, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+p1 <- read.csv("GBM_SM.csv")
+difp1 <- abs(p1$price - p1$predict)
+mdp1 <- mean(difp1)
+```
+
+```{r c19, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(p1, aes(price, predict))+
+  theme_bw()+
+  ggtitle("Model 1 - GBM without Brand and Model: Predict vs Real")+
+  geom_abline()+
+  labs(y = "Predict", x = "Price")+
+  geom_point(shape = 21, size = 1) + 
+  scale_y_continuous(label = scales::comma_format()) +
+  scale_x_continuous(label = scales::comma_format())
+
+```
+
+\newpage
+
+```{r c120, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+p2 <- read.csv("GBM_M.csv")
+difp2 <- abs(p2$price - p2$predict)
+mdp2 <- mean(difp2)
+```
+
+```{r c198, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(p2, aes(price, predict))+
+  theme_bw()+
+  ggtitle("Modelo 2 - GBM with Brand and Model: Predict vs Real")+
+  geom_abline()+
+  labs(y = "Predict", x = "Price")+
+  geom_point(shape = 21, size = 1) + 
+  scale_y_continuous(label = scales::comma_format()) +
+  scale_x_continuous(label = scales::comma_format())
+
+```
+
+To explain the prediction process, The p1 and p2 variables is the prediction made by the h20 localhost api, the config for this result is basically 5 nfolds and 3 trees per column. After the prediction, i downloaded the prediction and called it p1 and p2. 
+Now for the fun part, in R i created a variable called difp1 which is the price in the dataset minus the prediction made, and then i calculated the mean of all those results to determine the error margin in price  of the MLM.
+
+With the results, i came to the conclusion that the best model out of these two is the one without the Brand and Model variables (p1), because the p1 got a median error of 547.82 dollars and the p2 got a 646.07 dollars.
+So overall the p1 is the best model for this cause.
+
+\newpage
+
+Let´s go and test the DRF MLM now...
+
+```{r c341, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+p3 <- read.csv("DRF_SM.csv")
+difp3 <- abs(p3$price - p3$predict)
+mdp3 <- mean(difp3)
+```
+
+```{r c134, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(p3, aes(price, predict))+
+  theme_bw()+
+  ggtitle("Modelo 3 - DRF without Brand and Model: Predict vs Real")+
+  geom_abline()+
+  labs(y = "Predict", x = "Price")+
+  geom_point(shape = 21, size = 1) + 
+  scale_y_continuous(label = scales::comma_format()) +
+  scale_x_continuous(label = scales::comma_format())
+```
+
+```{r c182, echo=TRUE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+p4 <- read.csv("DRF_M.csv")
+difp4 <- abs(p4$price - p4$predict)
+mdp4 <- mean(difp4)
+```
+
+```{r c197, echo=FALSE, warning=FALSE, out.width = '55%', fig.align = 'center'}
+ggplot(p4, aes(price, predict))+
+  theme_bw()+
+  ggtitle("Modelo 4 - DRF with Brand and Model: Predict vs Real")+
+  geom_abline()+
+  labs(y = "Predict", x = "Price")+
+  geom_point(shape = 21, size = 1) + 
+  scale_y_continuous(label = scales::comma_format()) +
+  scale_x_continuous(label = scales::comma_format())
+```
+
+Going in depth in the drf´s, the conclusion is that the model´s are more precise without the Brand and Model included, by looking at the mdp3 and mdp4, averaging a mean error of 550.20$ and 574.59$. 
+
+\newpage
+
+# 6. Conclusion
+
+I came to the conclusion that Geely Auto should use the GBM Machine Learning Model but the one without the Brand and Model variables aka p1 because it passed the success criteria and i believe its a ready for production MLM.
+
+For the future, to improve even more the MLM, i believe by adding a Year of Production of the cars column would be a great addition overall as well a Mileage of the cars. 
+
+
