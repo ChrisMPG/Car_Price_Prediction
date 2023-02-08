@@ -1,4 +1,4 @@
-# Welcome, my name is Christian! 👋
+# Welcome! 👋
 
 
 ## 🚀 About me
